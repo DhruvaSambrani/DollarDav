@@ -1,6 +1,12 @@
 import os
+import sys
+try:
+   wd = sys._MEIPASS
+except AttributeError:
+   wd = os.getcwd()
 import subprocess
 import tempfile
+import webbrowser
 
 import vobject
 from textual import events
@@ -9,8 +15,7 @@ from textual.containers import Grid
 from textual.screen import ModalScreen
 from textual.widgets import (Button, Footer, Header, Label, ListItem, ListView,
                              Markdown)
-
-
+from textual import on
 def util_file(text):
     tmp = tempfile.NamedTemporaryFile(mode="w+", suffix=".md")
     tmp.write(text)
@@ -65,7 +70,7 @@ class NotesApp(App):
         ("d", "request_del_note", "Delete Note"),
         ("q", "request_quit", "Quit")
     ]
-    CSS_PATH = "main.css"
+    CSS_PATH = wd+"/main.css"
 
     def __init__(self, DIRPATH):
         super().__init__()
@@ -78,6 +83,10 @@ class NotesApp(App):
     async def on_mount(self):
         await self.update_container(True)
         self.update_text()
+
+    @on(Markdown.LinkClicked)
+    def linkclicked(self, ev):
+        webbrowser.open(ev.href)
 
     def update_text(self):
         self.textbox.update(self.notes[self.container.index].markdown())
@@ -113,6 +122,7 @@ class NotesApp(App):
         try:
             self.notes[self.container.index].edit()
         finally:
+            self.update_text()
             await self.update_container(False)
             self.refresh()
             self._driver.start_application_mode()
@@ -134,6 +144,7 @@ class NotesApp(App):
         rawcal.vjournal.add("description").value = "".join(newtext[1:]).strip()
         newcal = vobject.readOne(rawcal.serialize())
         n = Note(self.DIRPATH+"/"+newcal.vjournal.uid.value+".ics", newcal)
+        n.write()
         self.notes.append(n)
         await self.update_container(False)
         self.refresh()
@@ -167,6 +178,7 @@ class Note:
         newtext = util_file(self.summary()+"\n"+self.description())
         self.vobj.vjournal.summary.value = newtext[0].strip()
         self.vobj.vjournal.description.value = "".join(newtext[1:]).strip()
+        self.write()
 
     def delete(self):
         os.remove(self.path)
